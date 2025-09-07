@@ -40,6 +40,7 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
+
 // ---------------- MongoDB ----------------
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ MongoDB connected'))
@@ -586,19 +587,47 @@ app.delete('/api/workers/:id', authMiddleware, ownerOnly, async (req, res) => {
         res.status(500).json({ error: 'Server error while removing worker.' });
     }
 });
-// ✅ Get all workers for the logged-in owner
-app.get('/api/workers', authMiddleware, ownerOnly, async (req, res) => {
+
+// ---------------- ✅ NEW: Contact Form Route ----------------
+app.post('/api/contact', async (req, res) => {
+    // Check if the email service is configured in your .env file
+    if (!transporter) {
+        return res.status(503).json({ error: 'Contact service is temporarily unavailable.' });
+    }
+
     try {
-        const workers = await Worker.find({ shopId: req.user.shopId }).select('-password');
-        res.json(workers);
-    } catch (err) {
-        console.error("Fetch workers error:", err);
-        res.status(500).json({ error: 'Server error while fetching workers.' });
+        const { name, email, subject, message } = req.body;
+
+        // Basic validation
+        if (!name || !email || !subject || !message) {
+            return res.status(400).json({ error: 'All fields are required.' });
+        }
+
+        const mailOptions = {
+            from: `"KOMSyte Contact Form" <${EMAIL_USER}>`, // Sender address (your app's email)
+            to: 'karanindrale253@gmail.com', // List of receivers (your support email)
+            subject: `[Contact Form] ${subject}`, // Subject line
+            html: `
+                <h3>New Message from KOMSyte Contact Form</h3>
+                <p><strong>Name:</strong> ${name}</p>
+                <p><strong>Email:</strong> ${email}</p>
+                <hr>
+                <p><strong>Message:</strong></p>
+                <p>${message.replace(/\n/g, '<br>')}</p>
+            `,
+        };
+
+        // Send the email
+        await transporter.sendMail(mailOptions);
+        res.status(200).json({ message: 'Your message has been sent successfully!' });
+
+    } catch (error) {
+        console.error('Error sending contact form email:', error);
+        res.status(500).json({ error: 'Failed to send your message. Please try again later.' });
     }
 });
 
+
 // ---------------- Start Server ----------------
 const PORT = process.env.PORT || 5000;
-
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
